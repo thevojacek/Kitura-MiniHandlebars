@@ -1,0 +1,7 @@
+.build
+build
+Packages
+*.pkg
+Kitura-MiniHandlebars.xcodeproj
+*.DS_Store
+Package.resolved
