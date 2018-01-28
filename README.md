@@ -14,6 +14,33 @@ Install using SPM (Swfit Package Manager).
 
 ## Usage
 
+### Variable rendering
+
+You can render almost any variable into the template.
+
+```html
+    <p>{{text}}</p>
+```
+
+### Conditional rendering
+
+You can use conditional rendering and even use nested tags to compose complex templates.
+**Notice:** Make sure that you use only variables of evaluatable `Bool` type, anything else will be evaluated as false and therefore the block will not be rendered.
+
+```html
+    {{#if visible}}
+
+        <p>This is rendered.</p>
+
+        {{#if nonVisible}}
+            <p>This is not rendered.</p>
+        {{/if}}
+
+    {{/if}}
+```
+
+### Examples
+
 ```html
 <div>
 
