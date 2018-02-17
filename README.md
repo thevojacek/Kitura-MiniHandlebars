@@ -14,7 +14,7 @@ Install using SPM (Swfit Package Manager).
 
 ## Usage
 
-### Variable rendering
+### Variables rendering
 
 You can render almost any variable into the template.
 
@@ -22,7 +22,7 @@ You can render almost any variable into the template.
     <p>{{text}}</p>
 ```
 
-### Conditional rendering
+### Conditional rendering (#if)
 
 You can use conditional rendering and even use nested tags to compose complex templates.
 **Notice:** Make sure that you use only variables of evaluatable `Bool` type, anything else will be evaluated as false and therefore the block will not be rendered.
@@ -39,7 +39,35 @@ You can use conditional rendering and even use nested tags to compose complex te
     {{/if}}
 ```
 
-### Examples
+### Loop rendering (#each command)
+
+You can use each ```{{#each list}}{{/each}}``` to render repetitevely from an array. The rendered contextual property must be of a type ```Array<[String:Any]>```.
+**Notice:** If a rendered property is not an array, whole block will be deleted.
+
+```swift
+let context: [String: Any] = [
+    "articles": [
+        [ "title": "Some title", "text": "Any text...", "views": 324 ],
+        [ "title": "Some title 2", "text": "Any text...", "views": 98 ]
+    ]
+];
+```
+
+```html
+<div>
+{{#each articles}}
+    <!-- This code will be repeated twice and rendered -->
+    <article>
+        <h3>{{title}}</h3>
+        <p>{{text}}</p>
+        <span>Views: {{views}}</span>
+    </article>
+{{/each}}
+</div>
+```
+
+
+### Usage examples
 
 ```html
 <div>
