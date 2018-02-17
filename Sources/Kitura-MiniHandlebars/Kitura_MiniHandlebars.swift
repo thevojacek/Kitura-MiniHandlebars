@@ -18,6 +18,10 @@ import Foundation;
 import KituraTemplateEngine;
 
 
+public enum KituraMiniHandlebarsError: Error {
+    case RangeError
+}
+
 public struct KituraMiniHandlebarsOptions: RenderingOptions {
     
     /// Constructor
@@ -85,7 +89,7 @@ public class KituraMiniHandlebars: TemplateEngine {
                 
                 let range = commandWithoutTags.index(commandWithoutTags.startIndex, offsetBy: 3)...;
                 let contextCommand: String = String(commandWithoutTags[range]);
-                let endCommandOffset: Int = KituraMiniHandlebars.getConditionalEndCommandOffset(commands: commands);
+                let endCommandOffset: Int = KituraMiniHandlebars.getEndCommandOffset(commands: commands, startTag: "#if", endTag: "/if");
                 
                 rendered = KituraMiniHandlebars.processConditionalCommand(
                     command: contextCommand,
@@ -94,11 +98,26 @@ public class KituraMiniHandlebars: TemplateEngine {
                     offset: endCommandOffset
                 );
                 
-                let indexOfEnd: Int? = KituraMiniHandlebars.getIndexOfConditionalEnd(commands: commands, offset: endCommandOffset);
+                let indexOfEnd: Int? = KituraMiniHandlebars.getIndexOfEndTag(commands: commands, offset: endCommandOffset, endTag: "/if");
                 
                 if indexOfEnd != nil {
                     commands.remove(at: indexOfEnd!);
                 }
+                
+                processed = true;
+            }
+            
+            // each command
+            if !processed && commandWithoutTags.hasPrefix("#each") {
+                
+                let range = commandWithoutTags.index(commandWithoutTags.startIndex, offsetBy: 5)...;
+                let contextCommand: String = String(commandWithoutTags[range]);
+
+                rendered = KituraMiniHandlebars.processEachCommand(
+                    command: contextCommand,
+                    render: rendered,
+                    items: context[contextCommand] != nil ? context[contextCommand] : nil
+                );
                 
                 processed = true;
             }
@@ -118,19 +137,19 @@ public class KituraMiniHandlebars: TemplateEngine {
         return rendered;
     }
     
-    /// Returns the exact position of a desired end tag of a conditional command in the array of commands offseted by an offset specified.
+    /// Returns the exact position of a desired end tag of a command in the array of commands offseted by an offset specified.
     ///
     /// - Parameters:
     ///   - commands: Array of commands.
     ///   - offset: Offset of a desired conditional ending tag to be found.
     /// - Returns: Index of desired tag.
-    private static func getIndexOfConditionalEnd (commands: Array<String>, offset: Int) -> Int? {
+    private static func getIndexOfEndTag (commands: Array<String>, offset: Int, endTag: String) -> Int? {
         
         var endIndexIterations: Int = -1;
         
         let indexOfEnd = commands.index(where: { (command) -> Bool in
             
-            if command.range(of: "/if") != nil {
+            if command.range(of: endTag) != nil {
                 
                 endIndexIterations += 1;
                 
@@ -145,11 +164,11 @@ public class KituraMiniHandlebars: TemplateEngine {
         return indexOfEnd;
     }
     
-    /// Returns offset of a right ending tag of an conditional command currently being processed (on the first place in the 'commands' parameter).
+    /// Returns offset of a right ending tag of an requested command currently being processed (on the first place in the 'commands' parameter).
     ///
     /// - Parameter commands: Array of commands.
     /// - Returns: Offset of a right end tag of the first processed conditional command..
-    private static func getConditionalEndCommandOffset (commands: Array<String>) -> Int {
+    private static func getEndCommandOffset (commands: Array<String>, startTag: String, endTag: String) -> Int {
         
         var commandsToProcess: Array<String> = commands;
         commandsToProcess.removeFirst();
@@ -160,12 +179,12 @@ public class KituraMiniHandlebars: TemplateEngine {
         
         for command in commandsToProcess {
             
-            if command.range(of: "#if") != nil {
+            if command.range(of: startTag) != nil {
                 start += 1;
                 continue;
             }
             
-            if command.range(of: "/if") != nil {
+            if command.range(of: endTag) != nil {
                 
                 if start == end {
                     return offset;
@@ -194,28 +213,17 @@ public class KituraMiniHandlebars: TemplateEngine {
         
         do {
             
-            let wholeTextRange: NSRange = NSRange(toRender.startIndex..., in: toRender);
-            
-            let startRegex: NSRegularExpression = try NSRegularExpression(pattern: "\\{\\{#if.*\(command).*\\}\\}");
-            let startRange: NSRange = startRegex.rangeOfFirstMatch(in: toRender, range: wholeTextRange);
-            
-            // important: crucial condition, might cause engine to crash if not present
-            if startRange.lowerBound == NSNotFound { // check whether range could be found
-                return toRender;
-            }
-            
-            let fromStartRangeTextRange: NSRange =
-                NSRange(toRender.index(toRender.startIndex, offsetBy: Int(startRange.upperBound))..., in: toRender);
-            
-            let endRegex: NSRegularExpression = try NSRegularExpression(pattern: "\\{\\{/if.*\\}\\}");
-            let endRangeMatches: [NSTextCheckingResult] = endRegex.matches(in: toRender, range: fromStartRangeTextRange);
-            let endRange: NSRange = endRangeMatches[offset].range;
+            let tagRanges = try KituraMiniHandlebars.getTagRanges(
+                text: toRender,
+                startPattern: "\\{\\{#if.*\(command).*\\}\\}",
+                endPattern: "\\{\\{/if.*\\}\\}",
+                offset: offset);
             
             if shouldSectionBeDisplayed {
-                toRender.removeSubrange(Range(endRange, in: toRender)!);
-                toRender.removeSubrange(Range(startRange, in: toRender)!);
+                toRender.removeSubrange(Range(tagRanges.endRange, in: toRender)!);
+                toRender.removeSubrange(Range(tagRanges.startRange, in: toRender)!);
             } else {
-                toRender.removeSubrange(Range(NSRange(startRange.lowerBound...endRange.upperBound), in: toRender)!);
+                toRender.removeSubrange(Range(NSRange(tagRanges.startRange.lowerBound...tagRanges.endRange.upperBound), in: toRender)!);
             }
             
         } catch {
@@ -223,6 +231,107 @@ public class KituraMiniHandlebars: TemplateEngine {
         }
         
         return toRender;
+    }
+    
+    /// Processes only each commands. Takes offset of a ending tag as a parameter to skip any nested commands.
+    ///
+    /// - Parameters:
+    ///   - command: Command to be processed.
+    ///   - render: Template string.
+    ///   - value: Array.
+    /// - Returns: Modified template.
+    private static func processEachCommand (command: String, render: String, items: Any?) -> String {
+
+        var toRender = render;
+
+        do {
+            
+            // get tags ranges
+            let tagRanges = try KituraMiniHandlebars.getTagRanges(
+                text: toRender,
+                startPattern: "\\{\\{#each.*\(command).*\\}\\}",
+                endPattern: "\\{\\{/each.*\\}\\}"
+            );
+            
+            // body range
+            let bodyRangeStart = toRender.index(toRender.startIndex, offsetBy: Int(tagRanges.startRange.upperBound));
+            let bodyRangeEnd = toRender.index(toRender.startIndex, offsetBy: Int(tagRanges.endRange.lowerBound));
+            let bodyRange: NSRange = NSRange(bodyRangeStart..<bodyRangeEnd, in: toRender);
+            
+            // important: crucial condition, prevents from breaking
+            if bodyRange.lowerBound == NSNotFound {
+                return toRender;
+            }
+
+            let eachBody: String = String(toRender[bodyRangeStart..<bodyRangeEnd]);
+            
+            // delete if no valid value provided
+            guard items != nil || (items as? Array<[String: Any]>) != nil else {
+
+                toRender.removeSubrange(Range(tagRanges.endRange, in: toRender)!);
+                toRender.removeSubrange(Range(bodyRange, in: toRender)!);
+                toRender.removeSubrange(Range(tagRanges.startRange, in: toRender)!);
+
+                return toRender;
+            }
+            
+            guard let itemsArray = items as? Array<[String: Any]> else {
+                return toRender;
+            };
+            
+            var renderedEachBody: String = "";
+            
+            for item in itemsArray {
+                renderedEachBody = renderedEachBody + KituraMiniHandlebars.render(from: eachBody, context: item);
+            }
+
+            // finally, write results
+            toRender.removeSubrange(Range(tagRanges.endRange, in: toRender)!);
+            toRender.replaceSubrange(Range(bodyRange, in: toRender)!, with: renderedEachBody);
+            toRender.removeSubrange(Range(tagRanges.startRange, in: toRender)!);
+            
+        } catch {
+            return render;
+        }
+        
+        return toRender;
+    }
+    
+    /// Finds ranges of presented tags by a NSRegularExpressions patterns provided in a given string.
+    ///
+    /// - Parameters:
+    ///   - text: Given string.
+    ///   - startPattern: NSRegularExpression pattern.
+    ///   - endPattern: NSRegularExpression pattern.
+    ///   - offset: Offset of closing tag. Defaults to 0.
+    /// - Returns: Ranges of a requested tags.
+    /// - Throws: Errors.
+    private static func getTagRanges (text: String, startPattern: String, endPattern: String, offset: Int = 0)
+        throws -> (startRange: NSRange, endRange: NSRange) {
+                
+            let wholeTextRange: NSRange = NSRange(text.startIndex..., in: text);
+            
+            let startRegex: NSRegularExpression = try NSRegularExpression(pattern: startPattern);
+            let startRange: NSRange = startRegex.rangeOfFirstMatch(in: text, range: wholeTextRange);
+            
+            // important: crucial condition, might cause engine to crash if not present
+            if startRange.lowerBound == NSNotFound { // check whether range could be found
+                throw KituraMiniHandlebarsError.RangeError;
+            }
+            
+            let fromStartRangeTextRange: NSRange =
+                NSRange(text.index(text.startIndex, offsetBy: Int(startRange.upperBound))..., in: text);
+            
+            let endRegex: NSRegularExpression = try NSRegularExpression(pattern: endPattern);
+            let endRangeMatches: [NSTextCheckingResult] = endRegex.matches(in: text, range: fromStartRangeTextRange);
+            let endRange: NSRange = endRangeMatches[offset].range;
+
+            // important: crucial condition, might cause engine to crash if not present
+            if endRange.lowerBound == NSNotFound { // check whether range could be found
+                throw KituraMiniHandlebarsError.RangeError;
+            }
+        
+            return (startRange: startRange, endRange: endRange);
     }
     
     /// Processed all remaining command including the ones that contains variables. Deletes all that could not be processed from the template.

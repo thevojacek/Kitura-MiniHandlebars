@@ -104,12 +104,69 @@ class Kitura_MiniHandlebarsTests: XCTestCase {
         XCTAssertNotNil(res_b);
         XCTAssertNil(res_c);
     }
+    
+    func testRenderEachCommand () {
+        
+        let testString: String = """
+        <div class="someClassName">
+            {{#each items}}
+                {{#if display}}
+                    <p>{{value}}</p>
+                    <p>{{text}}</p>
+                {{/if}}
+            {{/each}}
+        </div>
+        """;
+        
+        let testContext: [String: Any] = [
+            "items": [
+                [ "value": 10, "text": "Any text.", "display": true ],
+                [ "value": 25, "text": "Any text 2.", "display": false ],
+                [ "value": 87, "text": "Any text 3.", "display": true ]
+            ]
+        ];
+        
+        let testResult: String = KituraMiniHandlebars.render(from: testString, context: testContext);
+        
+        let res_a: Range<String.Index>? = testResult.range(of: "<p>10</p>");
+        let res_b: Range<String.Index>? = testResult.range(of: "<p>25</p>");
+        let res_c: Range<String.Index>? = testResult.range(of: "<p>87</p>");
+        let res_d: Range<String.Index>? = testResult.range(of: "Any text.");
+        let res_e: Range<String.Index>? = testResult.range(of: "Any text 2.");
+        let res_f: Range<String.Index>? = testResult.range(of: "Any text 3.");
+        
+        XCTAssertNotNil(res_a);
+        XCTAssertNil(res_b);
+        XCTAssertNotNil(res_c);
+        XCTAssertNotNil(res_d);
+        XCTAssertNil(res_e);
+        XCTAssertNotNil(res_f);
+    }
+    
+    func testEachRenderBadValue () {
+
+        let testContext: [String: Any] = [String: Any]();
+        let testString: String = """
+        <div class="someClassName">
+            {{#each items}}
+                <span>Item name: <b>{{name}}</b></span>
+            {{/each}}
+        </div>
+        """;
+        
+        let testResult: String = KituraMiniHandlebars.render(from: testString, context: testContext);
+        let result: Range<String.Index>? = testResult.range(of: "Item name:");
+        
+        XCTAssertNil(result);
+    }
 
 
     static var allTests = [
         ("testRenderVariablesTest", testRenderVariablesTest),
         ("testRenderVariableNotRendered", testRenderVariableNotRendered),
         ("testRenderConditionals", testRenderConditionals),
-        ("testRenderConditionalsNesting", testRenderConditionalsNesting)
+        ("testRenderConditionalsNesting", testRenderConditionalsNesting),
+        ("testRenderEachCommand", testRenderEachCommand),
+        ("testEachRenderBadValue", testEachRenderBadValue)
     ]
 }
