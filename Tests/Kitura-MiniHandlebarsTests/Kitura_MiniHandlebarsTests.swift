@@ -159,6 +159,70 @@ class Kitura_MiniHandlebarsTests: XCTestCase {
         
         XCTAssertNil(result);
     }
+    
+    func testRenderCodable () {
+        
+        let fileManager = FileManager()
+        let testPath = fileManager.currentDirectoryPath
+        let filePath = "\(testPath)/test.html";
+        
+        let template: String = """
+        <div class="users">
+            {{#each users}}
+                <span>{{name}}</span>
+                <span>{{surname}}</span>
+            {{/each}}
+        </div>
+        """;
+        
+        struct TestCodable: Codable {
+            var name: String
+            var surname: String
+        }
+        
+        let testData: [TestCodable] = [
+            TestCodable(name: "Jan", surname: "Vojáček"),
+            TestCodable(name: "John", surname: "Appleseed")
+        ]
+        
+        do {
+            
+            // Create test template file to test render with.
+            try template.write(to: URL(fileURLWithPath: filePath), atomically: true, encoding: String.Encoding.utf8)
+            
+            let engine: KituraMiniHandlebars = KituraMiniHandlebars()
+            let render: String = try engine.render(
+                filePath: filePath,
+                with: testData,
+                forKey: "users",
+                options: KituraMiniHandlebarsOptions(),
+                templateName: ""
+            )
+            
+            // Remove test file at last.
+            do {
+                try fileManager.removeItem(atPath: filePath)
+            } catch {}
+            
+            let res1: Range<String.Index>? = render.range(of: testData[0].name)
+            let res2: Range<String.Index>? = render.range(of: testData[0].surname)
+            let res3: Range<String.Index>? = render.range(of: testData[1].name)
+            let res4: Range<String.Index>? = render.range(of: testData[1].surname)
+            
+            XCTAssertNotNil(res1)
+            XCTAssertNotNil(res2)
+            XCTAssertNotNil(res3)
+            XCTAssertNotNil(res4)
+            
+        } catch {
+            // Remove test file at last.
+            do {
+                try fileManager.removeItem(atPath: filePath)
+            } catch {}
+            
+            XCTFail("Encodable rendering test failed by unknown error.")
+        }
+    }
 
 
     static var allTests = [
@@ -167,6 +231,7 @@ class Kitura_MiniHandlebarsTests: XCTestCase {
         ("testRenderConditionals", testRenderConditionals),
         ("testRenderConditionalsNesting", testRenderConditionalsNesting),
         ("testRenderEachCommand", testRenderEachCommand),
-        ("testEachRenderBadValue", testEachRenderBadValue)
+        ("testEachRenderBadValue", testEachRenderBadValue),
+        ("testRenderCodable", testRenderCodable)
     ]
 }

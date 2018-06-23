@@ -20,12 +20,15 @@ import KituraTemplateEngine;
 
 public enum KituraMiniHandlebarsError: Error {
     case RangeError
+    case KeyForArrayMissing
+    case UnableToEncodeValue
+    case UnableToCastJSONtoDictionary
 }
 
 public struct KituraMiniHandlebarsOptions: RenderingOptions {
     
     /// Constructor
-    public init() {}
+    public init () {}
 }
 
 public class KituraMiniHandlebars: TemplateEngine {
@@ -58,6 +61,52 @@ public class KituraMiniHandlebars: TemplateEngine {
         let html: String = try String(contentsOf: URL(fileURLWithPath: filePath), encoding: .utf8);
         
         return KituraMiniHandlebars.render(from: html, context: context);
+    }
+    
+    public func render<T: Encodable>(filePath: String, with value: T, forKey key: String?, options: RenderingOptions, templateName: String) throws -> String {
+        
+        // Throw an error in case that value is an array and key which to map the array to is not present.
+        let valueIsArray: Bool = value is Array<Any>
+        
+        if key == nil && valueIsArray {
+            throw KituraMiniHandlebarsError.KeyForArrayMissing
+        }
+        
+        var data: Data = Data()
+        
+        do {
+            data = try JSONEncoder().encode(value)
+        } catch {
+            throw KituraMiniHandlebarsError.UnableToEncodeValue
+        }
+        
+        // todo: optimize
+        // todo: test this method in test (array and also non-array)
+        
+        let json = try JSONSerialization.jsonObject(with: data, options: .allowFragments)
+        var jsonArray: [[String: Any]]?
+        var jsonBasic: [String: Any]?
+        
+        if valueIsArray {
+            jsonArray = json as? [[String: Any]]
+        } else {
+            jsonBasic = json as? [String: Any]
+        }
+        
+        if jsonArray == nil && jsonBasic == nil {
+            throw KituraMiniHandlebarsError.UnableToCastJSONtoDictionary
+        }
+        
+        var context: [String: Any]
+        
+        if jsonArray != nil {
+            let key = key!
+            context = [key: jsonArray!]
+        } else {
+            context = jsonBasic!
+        }
+        
+        return try self.render(filePath: filePath, context: context)
     }
     
     /// Public static method to generate HTML.
@@ -369,12 +418,14 @@ public class KituraMiniHandlebars: TemplateEngine {
         
         for (index, char) in characters.enumerated() {
             
-            if char == "{" && characters[index + 1] == "{" {
+            let lastCharacter: Bool = (index + 1) > characters.count;
+            
+            if char == "{" && !lastCharacter && characters[index + 1] == "{" {
                 indexes.start.append(index);
                 continue;
             }
             
-            if char == "}" && characters[index + 1] == "}" {
+            if char == "}" && !lastCharacter && characters[index + 1] == "}" {
                 indexes.end.append(index);
             }
         }
