@@ -63,6 +63,16 @@ public class KituraMiniHandlebars: TemplateEngine {
         return KituraMiniHandlebars.render(from: html, context: context);
     }
     
+    /// Public method to generate HTML with using encodable structure.
+    ///
+    /// - Parameters:
+    ///   - filePath: The path of the template file.
+    ///   - value: Encodable structure.
+    ///   - key: Key to itarate encodagle structure in template file with in case of array in the value field.
+    ///   - options: KituraMiniHandlebarsOptions. *Note:* no options available at the time.
+    ///   - templateName: *Note:* no available at the time.
+    /// - Returns: String containing a HTML.
+    /// - Throws: Template reading error.
     public func render<T: Encodable>(filePath: String, with value: T, forKey key: String?, options: RenderingOptions, templateName: String) throws -> String {
         
         // Throw an error in case that value is an array and key which to map the array to is not present.
@@ -79,9 +89,6 @@ public class KituraMiniHandlebars: TemplateEngine {
         } catch {
             throw KituraMiniHandlebarsError.UnableToEncodeValue
         }
-        
-        // todo: optimize
-        // todo: test this method in test (array and also non-array)
         
         let json = try JSONSerialization.jsonObject(with: data, options: .allowFragments)
         var jsonArray: [[String: Any]]?
