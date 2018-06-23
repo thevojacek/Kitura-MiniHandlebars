@@ -1,11 +1,12 @@
 # Kitura-MiniHandlebars
 
+A Templating engine for Kitura that uses Handlebars-like syntaxed templates.
+
 ## Changelog
 ### 1.2.x
-*Kitura 2.4 support added.*
-Fixed bug where the engine could crash when command was placed as a last item in a template file.
+**Kitura 2.4 support added.**
 
-A Templating engine for Kitura that uses Handlebars-like syntaxed templates.
+Fixed bug where the engine could crash when command was placed as a last item in a template file.
 
 ## Summary
 
